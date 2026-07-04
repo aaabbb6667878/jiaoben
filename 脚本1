@@ -128,52 +128,6 @@ RunService.Stepped:Connect(function()
         end
     end
 end)
--- ==================== 第三人称切换 ====================
-local UserInputService = game:GetService("UserInputService")
-local thirdPersonEnabled = false
-local defaultMaxZoom = Cam.CameraMaxZoomDistance
-
-local tpBtn = Drawing.new("Square")
-tpBtn.Filled = true
-tpBtn.Size = Vector2.new(50, 50)
-tpBtn.Position = Vector2.new(20, 160)
-tpBtn.Color = Color3.new(0.3, 0.3, 0.8)
-tpBtn.Visible = true
-tpBtn.ZIndex = 999
-
-local tpText = Drawing.new("Text")
-tpText.Text = "3P"
-tpText.Size = 16
-tpText.Center = true
-tpText.Position = Vector2.new(45, 185)
-tpText.Color = Color3.new(1, 1, 1)
-tpText.Visible = true
-tpText.ZIndex = 1000
-
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or
-       input.UserInputType == Enum.UserInputType.Touch then
-        local pos = UserInputService:GetMouseLocation()
-        if pos.X >= 20 and pos.X <= 70 and pos.Y >= 160 and pos.Y <= 210 then
-            thirdPersonEnabled = not thirdPersonEnabled
-            if thirdPersonEnabled then
-                tpBtn.Color = Color3.new(0.2, 0.2, 0.9)
-                tpText.Text = "3P"
-                Cam.CameraType = Enum.CameraType.Custom
-                Cam.CameraMaxZoomDistance = 20
-                LocalPlayer.CameraMaxZoomDistance = 20
-            else
-                tpBtn.Color = Color3.new(0.3, 0.3, 0.8)
-                tpText.Text = "3P"
-                Cam.CameraType = Enum.CameraType.Custom
-                Cam.CameraMaxZoomDistance = defaultMaxZoom
-                LocalPlayer.CameraMaxZoomDistance = defaultMaxZoom
-            end
-        end
-    end
-end)
-
 -- ==================== 总开关 ====================
 local toggleBtn = Drawing.new("Square")
 toggleBtn.Filled = true
@@ -192,6 +146,7 @@ btnText.Color = Color3.new(1, 1, 1)
 btnText.Visible = true
 btnText.ZIndex = 1000
 
+local UserInputService = game:GetService("UserInputService")
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 or
