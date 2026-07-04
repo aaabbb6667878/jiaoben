@@ -1,3 +1,101 @@
+-- ==================== 子弹追踪 ====================
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Camera = workspace.CurrentCamera
+local bulletEnabled = true
+
+local function getClosestHead()
+    local closestHead = nil
+    local closestDistance = math.huge
+    if not LocalPlayer.Character then return end
+    if not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer and player.Character then
+            local character = player.Character
+            local root = character:FindFirstChild("HumanoidRootPart")
+            local head = character:FindFirstChild("Head")
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if root and head and humanoid and humanoid.Health > 0 then
+                local distance = (root.Position - LocalPlayer.Character.HumanoidRootPart.Position).Magnitude
+                if distance < closestDistance then
+                    closestHead = head
+                    closestDistance = distance
+                end
+            end
+        end
+    end
+    return closestHead
+end
+
+local function getClosestNpcHead()
+    local closestHead = nil
+    local closestDistance = math.huge
+    if not LocalPlayer.Character or not LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then return end
+    local localHrp = LocalPlayer.Character.HumanoidRootPart
+
+    for _, object in ipairs(Workspace:GetDescendants()) do
+        if object:IsA("Model") then
+            local humanoid = object:FindFirstChildOfClass("Humanoid")
+            local hrp = object:FindFirstChild("HumanoidRootPart") or object.PrimaryPart
+            local head = object:FindFirstChild("Head")
+            if humanoid and hrp and humanoid.Health > 0 then
+                local isPlayer = false
+                for _, pl in ipairs(Players:GetPlayers()) do
+                    if pl.Character == object then isPlayer = true break end
+                end
+                if not isPlayer and head then
+                    local distance = (hrp.Position - localHrp.Position).Magnitude
+                    if distance < closestDistance then
+                        closestHead = head
+                        closestDistance = distance
+                    end
+                end
+            end
+        end
+    end
+    return closestHead
+end
+
+local oldRaycast = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+    local method = getnamecallmethod()
+    local args = {...}
+    if method == "Raycast" and not checkcaller() then
+        local origin = args[1] or Camera.CFrame.Position
+        if bulletEnabled then
+            local closestHead = getClosestHead()
+            if not closestHead then closestHead = getClosestNpcHead() end
+            if closestHead then
+                return {
+                    Instance = closestHead,
+                    Position = closestHead.Position,
+                    Normal = (origin - closestHead.Position).Unit,
+                    Material = Enum.Material.Plastic,
+                    Distance = (closestHead.Position - origin).Magnitude
+                }
+            end
+        end
+    end
+    return oldRaycast(self, ...)
+end))
+
+-- ==================== 绕过 IsInGroup ====================
+local getnamecallmethod = getnamecallmethod
+local Speaker = cloneref(Players).LocalPlayer
+local OldNameCall = hookmetamethod(game, "__namecall", function(self, ...)
+    if self ~= Speaker or getnamecallmethod() ~= "IsInGroup" then
+        return OldNameCall(self, ...)
+    end
+    return true
+end)
+
+-- ==================== 反挂机踢出 ====================
+for _, conn in getconnections(Players.LocalPlayer.Idled) do
+    pcall(conn.Disable, conn)
+    pcall(conn.Disconnect, conn)
+end
+
 -- ==================== 透视（Highlight） ====================
 local FillColor = Color3.fromRGB(175, 25, 255)
 local DepthMode = "AlwaysOnTop"
@@ -6,10 +104,6 @@ local OutlineColor = Color3.fromRGB(255, 255, 255)
 local OutlineTransparency = 0
 
 local CoreGui = game:FindService("CoreGui")
-local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
-local Cam = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
 local connections = {}
 
 local Storage = Instance.new("Folder")
@@ -65,6 +159,9 @@ Players.PlayerRemoving:Connect(function(Player)
 end)
 
 -- ==================== 绿色自瞄（FOV=150） ====================
+local RunService = game:GetService("RunService")
+local Cam = workspace.CurrentCamera
+local aimbotEnabled = true
 local fov = 150
 
 local FOVring = Drawing.new("Circle")
@@ -103,8 +200,8 @@ end
 
 RunService.RenderStepped:Connect(function()
     FOVring.Position = Cam.ViewportSize / 2
-    FOVring.Visible = masterEnabled
-    if not masterEnabled then return end
+    FOVring.Visible = aimbotEnabled
+    if not aimbotEnabled then return end
     local closest = getClosestPlayerInFOV("Head")
     if closest and closest.Character and closest.Character:FindFirstChild("Head") then
         lookAt(closest.Character.Head.Position)
@@ -128,7 +225,22 @@ RunService.Stepped:Connect(function()
         end
     end
 end)
--- ==================== 总开关 ====================
+
+-- ==================== 绕过 Adonis 反作弊 ====================
+local function bypassAdonis()
+    for i, v in pairs(game:GetDescendants()) do
+        if v.Name == "__FUNCTION" then
+            loadstring(game:HttpGet('https://raw.githubusercontent.com/Pixeluted/adoniscries/main/Source.lua'))()
+            return true
+        end
+    end
+    return false
+end
+bypassAdonis()
+
+-- ==================== 按钮 ====================
+local UserInputService = game:GetService("UserInputService")
+
 local toggleBtn = Drawing.new("Square")
 toggleBtn.Filled = true
 toggleBtn.Size = Vector2.new(40, 40)
@@ -146,12 +258,46 @@ btnText.Color = Color3.new(1, 1, 1)
 btnText.Visible = true
 btnText.ZIndex = 1000
 
-local UserInputService = game:GetService("UserInputService")
+local aimBtn = Drawing.new("Square")
+aimBtn.Filled = true
+aimBtn.Size = Vector2.new(50, 50)
+aimBtn.Position = Vector2.new(20, 160)
+aimBtn.Color = Color3.new(0.2, 0.8, 0.2)
+aimBtn.Visible = true
+aimBtn.ZIndex = 999
+
+local aimBtnText = Drawing.new("Text")
+aimBtnText.Text = "AIM"
+aimBtnText.Size = 14
+aimBtnText.Center = true
+aimBtnText.Position = Vector2.new(45, 185)
+aimBtnText.Color = Color3.new(1, 1, 1)
+aimBtnText.Visible = true
+aimBtnText.ZIndex = 1000
+
+local bulletBtn = Drawing.new("Square")
+bulletBtn.Filled = true
+bulletBtn.Size = Vector2.new(50, 50)
+bulletBtn.Position = Vector2.new(20, 220)
+bulletBtn.Color = Color3.new(0.2, 0.8, 0.2)
+bulletBtn.Visible = true
+bulletBtn.ZIndex = 999
+
+local bulletBtnText = Drawing.new("Text")
+bulletBtnText.Text = "BUL"
+bulletBtnText.Size = 14
+bulletBtnText.Center = true
+bulletBtnText.Position = Vector2.new(45, 245)
+bulletBtnText.Color = Color3.new(1, 1, 1)
+bulletBtnText.Visible = true
+bulletBtnText.ZIndex = 1000
+
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.UserInputType == Enum.UserInputType.MouseButton1 or
        input.UserInputType == Enum.UserInputType.Touch then
         local pos = UserInputService:GetMouseLocation()
+
         if pos.X >= 20 and pos.X <= 60 and pos.Y >= 100 and pos.Y <= 140 then
             masterEnabled = not masterEnabled
             if masterEnabled then
@@ -163,6 +309,30 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
                 btnText.Text = "OFF"
                 clearAllHighlights()
                 FOVring.Visible = false
+            end
+        end
+
+        if pos.X >= 20 and pos.X <= 70 and pos.Y >= 160 and pos.Y <= 210 then
+            aimbotEnabled = not aimbotEnabled
+            if aimbotEnabled then
+                aimBtn.Color = Color3.new(0.2, 0.8, 0.2)
+                aimBtnText.Text = "AIM"
+                FOVring.Visible = true
+            else
+                aimBtn.Color = Color3.new(0.8, 0.2, 0.2)
+                aimBtnText.Text = "OFF"
+                FOVring.Visible = false
+            end
+        end
+
+        if pos.X >= 20 and pos.X <= 70 and pos.Y >= 220 and pos.Y <= 270 then
+            bulletEnabled = not bulletEnabled
+            if bulletEnabled then
+                bulletBtn.Color = Color3.new(0.2, 0.8, 0.2)
+                bulletBtnText.Text = "BUL"
+            else
+                bulletBtn.Color = Color3.new(0.8, 0.2, 0.2)
+                bulletBtnText.Text = "OFF"
             end
         end
     end
