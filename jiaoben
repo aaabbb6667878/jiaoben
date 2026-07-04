@@ -1,0 +1,185 @@
+-- ==================== 总开关 ====================
+local masterEnabled = true
+local toggleBtn = Drawing.new("Square")
+toggleBtn.Filled = true
+toggleBtn.Size = Vector2.new(40, 40)
+toggleBtn.Position = Vector2.new(20, 100)
+toggleBtn.Color = Color3.new(0.2, 0.8, 0.2)
+toggleBtn.Visible = true
+toggleBtn.ZIndex = 999
+
+local btnText = Drawing.new("Text")
+btnText.Text = "ON"
+btnText.Size = 16
+btnText.Center = true
+btnText.Position = Vector2.new(40, 120)
+btnText.Color = Color3.new(1, 1, 1)
+btnText.Visible = true
+btnText.ZIndex = 1000
+
+local function clearAllHighlights()
+    for _, child in pairs(Storage:GetChildren()) do
+        child:Destroy()
+    end
+end
+
+local function restoreAllHighlights()
+    for _, p in pairs(Players:GetPlayers()) do
+        Highlight(p)
+    end
+end
+
+local UserInputService = game:GetService("UserInputService")
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or
+       input.UserInputType == Enum.UserInputType.Touch then
+        local pos = UserInputService:GetMouseLocation()
+        if pos.X >= 20 and pos.X <= 60 and pos.Y >= 100 and pos.Y <= 140 then
+            masterEnabled = not masterEnabled
+            if masterEnabled then
+                toggleBtn.Color = Color3.new(0.2, 0.8, 0.2)
+                btnText.Text = "ON"
+                restoreAllHighlights()
+            else
+                toggleBtn.Color = Color3.new(0.8, 0.2, 0.2)
+                btnText.Text = "OFF"
+                clearAllHighlights()
+                FOVring.Visible = false
+            end
+        end
+    end
+end)
+
+-- ==================== 透视（Highlight） ====================
+local FillColor = Color3.fromRGB(175, 25, 255)
+local DepthMode = "AlwaysOnTop"
+local FillTransparency = 0.5
+local OutlineColor = Color3.fromRGB(255, 255, 255)
+local OutlineTransparency = 0
+
+local CoreGui = game:FindService("CoreGui")
+local Players = game:GetService("Players")
+local connections = {}
+
+local Storage = Instance.new("Folder")
+Storage.Parent = CoreGui
+Storage.Name = "Highlight_Storage"
+
+function Highlight(Player)
+    if not masterEnabled then return end
+    if Storage:FindFirstChild(Player.Name) then return end
+    local hl = Instance.new("Highlight")
+    hl.Name = Player.Name
+    hl.FillColor = FillColor
+    hl.DepthMode = DepthMode
+    hl.FillTransparency = FillTransparency
+    hl.OutlineColor = OutlineColor
+    hl.OutlineTransparency = 0
+    hl.Parent = Storage
+
+    local char = Player.Character
+    if char then hl.Adornee = char end
+
+    if connections[Player] then connections[Player]:Disconnect() end
+    connections[Player] = Player.CharacterAdded:Connect(function(c)
+        if masterEnabled and hl and hl.Parent then
+            hl.Adornee = c
+        end
+    end)
+end
+
+Players.PlayerAdded:Connect(function(p)
+    if masterEnabled then Highlight(p) end
+end)
+for _, p in pairs(Players:GetPlayers()) do Highlight(p) end
+
+Players.PlayerRemoving:Connect(function(Player)
+    local name = Player.Name
+    if Storage:FindFirstChild(name) then Storage[name]:Destroy() end
+    if connections[Player] then connections[Player]:Disconnect() connections[Player] = nil end
+end)
+
+-- ==================== 绿色自瞄（FOV=150） ====================
+local RunService = game:GetService("RunService")
+local Cam = workspace.CurrentCamera
+local fov = 150
+
+local FOVring = Drawing.new("Circle")
+FOVring.Visible = true
+FOVring.Thickness = 2
+FOVring.Color = Color3.fromRGB(0, 255, 0)
+FOVring.Filled = false
+FOVring.Radius = fov
+FOVring.Position = Cam.ViewportSize / 2
+
+local function updateDrawings()
+    if masterEnabled then
+        FOVring.Visible = true
+        FOVring.Position = Cam.ViewportSize / 2
+    else
+        FOVring.Visible = false
+    end
+end
+
+local function lookAt(target)
+    local lookVector = (target - Cam.CFrame.Position).unit
+    local newCFrame = CFrame.new(Cam.CFrame.Position, Cam.CFrame.Position + lookVector)
+    Cam.CFrame = newCFrame
+endlocal function getClosestPlayerInFOV(trg_part)
+    local nearest = nil
+    local last = math.huge
+    local PlayerMousePos = Cam.ViewportSize / 2
+
+    for _, Player in ipairs(Players:GetPlayers()) do
+        if Player ~= Players.LocalPlayer then
+            local part = Player.Character and Player.Character:FindFirstChild(trg_part)
+            if part then
+                local ePos, isVisible = Cam:WorldToViewportPoint(part.Position)
+                local distance = (Vector2.new(ePos.x, ePos.y) - PlayerMousePos).Magnitude
+                if distance < last and isVisible and distance < fov then
+                    last = distance
+                    nearest = Player
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+RunService.RenderStepped:Connect(function()
+    updateDrawings()
+    if not masterEnabled then return end
+    local closest = getClosestPlayerInFOV("Head")
+    if closest and closest.Character:FindFirstChild("Head") then
+        lookAt(closest.Character.Head.Position)
+    end
+end)
+
+-- ==================== 无后坐力 ====================
+local LocalPlayer = Players.LocalPlayer
+
+RunService.Stepped:Connect(function()
+    if not masterEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
+
+    for _, tool in pairs(char:GetChildren()) do
+        if not tool:IsA("Tool") then continue end
+
+        local handle = tool:FindFirstChild("Handle")
+        if handle then
+            handle.Velocity = Vector3.new(0, 0, 0)
+            handle.RotVelocity = Vector3.new(0, 0, 0)
+        end
+
+        local fireEvent = tool:FindFirstChild("FireEvent")
+        if fireEvent then fireEvent:Destroy() end
+
+        tool.Activated:Connect(function()
+            if masterEnabled and tool.Enabled then
+                tool:Activate()
+            end
+        end)
+    end
+end)
