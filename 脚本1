@@ -125,9 +125,9 @@ RunService.Stepped:Connect(function()
             handle.Velocity = Vector3.new(0, 0, 0)
             handle.RotVelocity = Vector3.new(0, 0, 0)
         end
-
         local fireEvent = tool:FindFirstChild("FireEvent")
         if fireEvent then fireEvent:Destroy() end
+
         tool.Activated:Connect(function()
             if masterEnabled and tool.Enabled then
                 tool:Activate()
@@ -135,6 +135,19 @@ RunService.Stepped:Connect(function()
         end)
     end
 end)
+
+-- ==================== 子弹穿墙 ====================
+workspace.ChildAdded:Connect(function(child)
+    if child:IsA("BasePart") and child.Velocity.Magnitude > 100 then
+        child.CanCollide = false
+    end
+end)
+
+for _, obj in pairs(workspace:GetDescendants()) do
+    if obj:IsA("BasePart") and obj.Velocity.Magnitude > 100 then
+        obj.CanCollide = false
+    end
+end
 
 -- ==================== 总开关 ====================
 local toggleBtn = Drawing.new("Square")
