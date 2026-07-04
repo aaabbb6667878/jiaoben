@@ -7,16 +7,24 @@ local OutlineTransparency = 0
 
 local CoreGui = game:FindService("CoreGui")
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local Cam = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
 local connections = {}
 
 local Storage = Instance.new("Folder")
 Storage.Parent = CoreGui
 Storage.Name = "Highlight_Storage"
 
-local masterEnabled = true
+local espEnabled = true
+local aimbotEnabled = true
+local norecoilEnabled = true
+local fireRateEnabled = true
+local bulletBypassEnabled = true
+local triggerEnabled = true
 
 function Highlight(Player)
-    if not masterEnabled then return end
+    if not espEnabled then return end
     local old = Storage:FindFirstChild(Player.Name)
     if old then old:Destroy() end
     if connections[Player] then connections[Player]:Disconnect() end
@@ -34,14 +42,26 @@ function Highlight(Player)
     if char then hl.Adornee = char end
 
     connections[Player] = Player.CharacterAdded:Connect(function(c)
-        if masterEnabled and hl.Parent then
+        if espEnabled and hl.Parent then
             hl.Adornee = c
         end
     end)
 end
 
+function clearAllHighlights()
+    for _, child in pairs(Storage:GetChildren()) do
+        child:Destroy()
+    end
+end
+
+function restoreAllHighlights()
+    for _, p in pairs(Players:GetPlayers()) do
+        Highlight(p)
+    end
+end
+
 Players.PlayerAdded:Connect(function(p)
-    if masterEnabled then Highlight(p) end
+    if espEnabled then Highlight(p) end
 end)
 for _, p in pairs(Players:GetPlayers()) do Highlight(p) end
 
@@ -51,9 +71,7 @@ Players.PlayerRemoving:Connect(function(Player)
     if connections[Player] then connections[Player]:Disconnect() connections[Player] = nil end
 end)
 
--- ==================== 绿色自瞄（FOV=150） ====================
-local RunService = game:GetService("RunService")
-local Cam = workspace.CurrentCamera
+-- ==================== 绿色自瞄（FOV=150，独立开关） ====================
 local fov = 150
 
 local FOVring = Drawing.new("Circle")
@@ -65,7 +83,7 @@ FOVring.Radius = fov
 FOVring.Position = Cam.ViewportSize / 2
 
 local function updateDrawings()
-    if masterEnabled then
+    if aimbotEnabled then
         FOVring.Visible = true
         FOVring.Position = Cam.ViewportSize / 2
     else
@@ -102,7 +120,7 @@ end
 
 RunService.RenderStepped:Connect(function()
     updateDrawings()
-    if not masterEnabled then return end
+    if not aimbotEnabled then return end
     local closest = getClosestPlayerInFOV("Head")
     if closest and closest.Character:FindFirstChild("Head") then
         lookAt(closest.Character.Head.Position)
@@ -110,10 +128,8 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ==================== 无后坐力 ====================
-local LocalPlayer = Players.LocalPlayer
-
 RunService.Stepped:Connect(function()
-    if not masterEnabled then return end
+    if not norecoilEnabled then return end
     local char = LocalPlayer.Character
     if not char then return end
 
@@ -125,78 +141,162 @@ RunService.Stepped:Connect(function()
             handle.Velocity = Vector3.new(0, 0, 0)
             handle.RotVelocity = Vector3.new(0, 0, 0)
         end
+
         local fireEvent = tool:FindFirstChild("FireEvent")
         if fireEvent then fireEvent:Destroy() end
 
         tool.Activated:Connect(function()
-            if masterEnabled and tool.Enabled then
+            if norecoilEnabled and tool.Enabled then
                 tool:Activate()
             end
         end)
     end
-end)
+end)-- ==================== 射速加速 ====================
+RunService.Stepped:Connect(function()
+    if not fireRateEnabled then return end
+    local char = LocalPlayer.Character
+    if not char then return end
 
--- ==================== 子弹穿墙 ====================
-workspace.ChildAdded:Connect(function(child)
-    if child:IsA("BasePart") and child.Velocity.Magnitude > 100 then
-        child.CanCollide = false
+    for _, tool in pairs(char:GetChildren()) do
+        if not tool:IsA("Tool") then continue end
+
+        local cooldown = tool:FindFirstChild("Cooldown")
+        if cooldown and cooldown:IsA("NumberValue") then cooldown.Value = 0 end
+
+        local fireRate = tool:FindFirstChild("FireRate")
+        if fireRate and fireRate:IsA("NumberValue") then fireRate.Value = 1000 end
+
+        local animate = tool:FindFirstChild("Animate")
+        if animate then animate:Destroy() end
+
+        local boltTime = tool:FindFirstChild("BoltTime")
+        if boltTime and boltTime:IsA("NumberValue") then boltTime.Value = 0 end
+
+        local reloadTime = tool:FindFirstChild("ReloadTime")
+        if reloadTime and reloadTime:IsA("NumberValue") then reloadTime.Value = 0 end
+
+        tool.Enabled = true
+        tool.CanBeDropped = true
     end
 end)
 
-for _, obj in pairs(workspace:GetDescendants()) do
-    if obj:IsA("BasePart") and obj.Velocity.Magnitude > 100 then
-        obj.CanCollide = false
-    end
-end
+-- ==================== 伪子弹追踪（枪口贴脸） ====================
+RunService.RenderStepped:Connect(function()
+    if not bulletBypassEnabled then return end
+    if not aimbotEnabled then return end
+    local closest = getClosestPlayerInFOV("Head")
+    if not closest or not closest.Character then return end
+    local targetHead = closest.Character:FindFirstChild("Head")
+    if not targetHead then return end
 
--- ==================== 总开关 ====================
-local toggleBtn = Drawing.new("Square")
-toggleBtn.Filled = true
-toggleBtn.Size = Vector2.new(40, 40)
-toggleBtn.Position = Vector2.new(20, 100)
-toggleBtn.Color = Color3.new(0.2, 0.8, 0.2)
-toggleBtn.Visible = true
-toggleBtn.ZIndex = 999
+    local myChar = LocalPlayer.Character
+    if not myChar then return end
 
-local btnText = Drawing.new("Text")
-btnText.Text = "ON"
-btnText.Size = 16
-btnText.Center = true
-btnText.Position = Vector2.new(40, 120)
-btnText.Color = Color3.new(1, 1, 1)
-btnText.Visible = true
-btnText.ZIndex = 1000
-
-local function clearAllHighlights()
-    for _, child in pairs(Storage:GetChildren()) do
-        child:Destroy()
-    end
-end
-
-local function restoreAllHighlights()
-    for _, p in pairs(Players:GetPlayers()) do
-        Highlight(p)
-    end
-end
-
-local UserInputService = game:GetService("UserInputService")
-UserInputService.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or
-       input.UserInputType == Enum.UserInputType.Touch then
-        local pos = UserInputService:GetMouseLocation()
-        if pos.X >= 20 and pos.X <= 60 and pos.Y >= 100 and pos.Y <= 140 then
-            masterEnabled = not masterEnabled
-            if masterEnabled then
-                toggleBtn.Color = Color3.new(0.2, 0.8, 0.2)
-                btnText.Text = "ON"
-                restoreAllHighlights()
-            else
-                toggleBtn.Color = Color3.new(0.8, 0.2, 0.2)
-                btnText.Text = "OFF"
-                clearAllHighlights()
-                FOVring.Visible = false
+    for _, tool in pairs(myChar:GetChildren()) do
+        if tool:IsA("Tool") then
+            local handle = tool:FindFirstChild("Handle")
+            if handle then
+                local direction = (targetHead.Position - handle.Position).Unit
+                handle.CFrame = CFrame.new(targetHead.Position - direction * 2)
             end
         end
     end
 end)
+
+-- ==================== 自动扳机 ====================
+local function isAimingAtHead()
+    local ray = Cam:ScreenPointToRay(Cam.ViewportSize.X / 2, Cam.ViewportSize.Y / 2)
+    local raycastParams = RaycastParams.new()
+    raycastParams.FilterType = Enum.RaycastFilterType.Include
+    raycastParams.IgnoreWater = true
+
+    local myChar = LocalPlayer.Character
+    if not myChar then return false end
+    raycastParams.FilterDescendantsInstances = {myChar}
+
+    local result = workspace:Raycast(ray.Origin, ray.Direction * 1000, raycastParams)
+    if result then
+        local hitPart = result.Instance
+        for _, player in pairs(Players:GetPlayers()) do
+            if player == LocalPlayer then continue end
+            local char = player.Character
+            if char and hitPart:IsDescendantOf(char) and hitPart.Name == "Head" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+RunService.RenderStepped:Connect(function()
+    if not triggerEnabled then return end
+    if isAimingAtHead() then
+        local char = LocalPlayer.Character
+        if char then
+            local tool = char:FindFirstChildOfClass("Tool")
+            if tool then
+                tool:Activate()
+            end
+        end
+    end
+end)
+
+-- ==================== 悬浮窗 GUI ====================
+local UserInputService = game:GetService("UserInputService")
+
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Script1"
+screenGui.Parent = CoreGui
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 180, 0, 260)
+mainFrame.Position = UDim2.new(0, 20, 0, 100)
+mainFrame.BackgroundColor3 = Color3.new(0.1, 0.1, 0.1)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true
+mainFrame.Parent = screenGui
+
+local titleBar = Instance.new("Frame")
+titleBar.Size = UDim2.new(1, 0, 0, 25)
+titleBar.BackgroundColor3 = Color3.new(0.2, 0.2, 0.2)
+titleBar.BorderSizePixel = 0
+titleBar.Parent = mainFrame
+
+local titleText = Instance.new("TextLabel")
+titleText.Size = UDim2.new(1, -30, 1, 0)
+titleText.Position = UDim2.new(0, 8, 0, 0)
+titleText.Text = "脚本1"
+titleText.TextColor3 = Color3.new(1, 1, 1)
+titleText.TextSize = 14
+titleText.BackgroundTransparency = 1
+titleText.TextXAlignment = Enum.TextXAlignment.Left
+titleText.Parent = titleBar
+
+local function createToggle(name, yPos, enabled, callback)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(1, -10, 0, 28)
+    btn.Position = UDim2.new(0, 5, 0, yPos)
+    btn.Text = name .. " [ON]"
+    btn.TextColor3 = Color3.new(1, 1, 1)
+    btn.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
+    btn.BorderSizePixel = 0
+    btn.TextSize = 13
+    btn.Parent = mainFrame
+
+    btn.MouseButton1Click:Connect(function()
+        enabled = not enabled
+        if enabled then
+            btn.Text = name .. " [ON]"
+            btn.BackgroundColor3 = Color3.new(0.2, 0.8, 0.2)
+        else
+            btn.Text = name .. " [OFF]"
+            btn.BackgroundColor3 = Color3.new(0.8, 0.2, 0.2)
+        end
+        callback(enabled)
+    end)
+    return btn
+end
+
+createToggle("透视", 30, espEnabled, function(v)
+ 
